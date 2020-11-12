@@ -22,13 +22,14 @@
 module eink_top(
     input clk,
     input rst,
+    input frame_fresh,
     input [9:0] MODE_WIDTH,
-    input [9:0] XCL_HIGH_WIDTH,
-    input [9:0] XCL_LOW_WIDTH,
-    input [9:0] XCL_CYCLE_WIDTH,
+    //input [9:0] XCL_HIGH_WIDTH,
+    //input [9:0] XCL_LOW_WIDTH,
+    //input [9:0] XCL_CYCLE_WIDTH,
     input [9:0] XCL_NUM,
     input [9:0] CKV_HIGH_WIDTH,
-    input [9:0] CKV_LOW_WIDTH,
+    //input [9:0] CKV_LOW_WIDTH,
     input [9:0] CKV_CYCLE_WIDTH,
     input [9:0] CKV_NUM,
 
@@ -48,8 +49,6 @@ module eink_top(
     reg spv;
     reg mode;
     reg [15:0] data;
-
-
     
     //STATE
     parameter   STAND_BY = 5'b00000, //1
@@ -70,28 +69,114 @@ module eink_top(
     reg[4:0] cur_state;
     reg[4:0] next_state;
 
-    always @(posedge clk or posedge rst)
+    always @(posedge clk or posedge rst or posedge frame_fresh)
         begin
             if(rst)
                 cur_state <= STAND_BY;
+            else if(frame_fresh)
+                cur_state <= MODE_LOW;
             else
                 cur_state <= next_state;
         end
 
-    always @(*)
+    always @(posedge clk)
         begin
             case(cur_state)
-                5'b00000:   next_state = 5'b00000; //STAND_BY
-                5'b00001:   next_state = 5'b00010;
-                5'b00010:   next_state = 5'b00011;
-                5'b00011:   next_state = 5'b00101;
+                STAND_BY:   next_state = STAND_BY;
+                MODE_LOW:
+                    begin
+                        if(global_counter == MODE_WIDTH)
+                            begin
+                                next_state = SPV_DELAY;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
+                SPV_DELAY: 
+                    begin
+                        if(global_counter == SPV_DELAY_WIDTH)
+                            begin
+                                next_state = SPV_LOW;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
+                SPV_LOW:   
+                    begin
+                        if(global_counter == SPV_LOW_WIDTH)
+                            begin
+                                next_state = CKV_SETUP;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
                 //5'b00100: next_state = 5'b00001;
-                5'b00101:   next_state = 5'b00111;
+                CKV_SETUP:   
+                    begin
+                        if(global_counter == CKV_SETUP_WIDTH)
+                            begin
+                                next_state = XLE_DELAY;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
                 //5'b00110: next_state = 5'b00001;
-                5'b00111:   next_state = 5'b01000;
-                5'b01000:   next_state = 5'b01001;
-                5'b01001:   next_state = 5'b01010;
-                5'b01010:
+                XLE_DELAY:   
+                    begin
+                        if(global_counter == XLE_DELAY_WIDTH)
+                            begin
+                                next_state = XLE_HIGH;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
+                XLE_HIGH:   
+                    begin
+                        if(global_counter == XLE_HIGH_WIDTH)
+                            begin
+                                next_state = XSTL_DELAY;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
+                XSTL_DELAY:   
+                    begin
+                        if(global_counter == XSTL_DELAY_WIDTH)
+                            begin
+                                next_state = XSTL_LOW;
+                                global_counter <= 0;
+                            end
+                        else    
+                            begin
+                                global_counter <= global_counter+1;
+                                next_state = cur_state;
+                            end
+                    end
+                XSTL_LOW:
                     begin
                         if(ckv_num_counter==CKV_NUM)
                             begin
@@ -111,91 +196,52 @@ module eink_top(
     reg [15:0] xcl_num_counter;
     
     //assgin value with state
-    always @(*)
+    always @(posedge clk or posedge rst)
         begin
-            case(cur_state)
-                5'b00000:   mode = 1;
-                5'b00001:   mode = 0;
-                5'b00010:   mode = 1;
-                5'b00011:   mode = 1;
-                //5'b00100:  
-                5'b00101:   mode = 1;
-                //5'b00110:  
-                5'b00111:   mode = 1;
-                5'b01000:   mode = 1;
-                5'b01001:   mode = 1;
-                5'b01010:   mode = 1;
-            endcase
-        end
-    always @(*)
-        begin
-            case(cur_state)
-                5'b00000:   spv = 1;
-                5'b00001:   spv = 1;
-                5'b00010:   spv = 1;
-                5'b00011:   spv = 0;
-                //5'b00100:
-                5'b00101:   spv = 1;
-                //5'b00110:
-                5'b00111:   spv = 1;
-                5'b01000:   spv = 1;
-                5'b01001:   spv = 1;
-                5'b01010:   spv = 1;
-            endcase
-        end
-    always @(*)
-        begin
-            case(cur_state)
-                5'b00000:   xstl = 1;
-                5'b00001:   xstl = 1;
-                5'b00010:   xstl = 1;
-                5'b00011:   xstl = 1;
-                //5'b00100:
-                5'b00101:   xstl = 1;
-                //5'b00110:
-                5'b00111:   xstl = 1;
-                5'b01000:   xstl = 1;
-                5'b01001:   xstl = 1;
-                5'b01010:   xstl = 0;
-            endcase
+            if(rst)
+                mode <= 1;
+            else if(cur_state == MODE_LOW)
+                mode <= 0;
+            else
+                spv <= 1;
         end
     always @(posedge clk or posedge rst)
         begin
             if(rst)
-              xle<=0;
+                spv <= 1;
+            else if(cur_state == SPV_LOW)
+                spv <= 0;
+            else
+                spv <= 1;
+        end
+    always @(posedge clk or posedge rst)
+        begin
+            if(rst)
+                xstl <= 1;
+            else if(cur_state == XSTL_LOW)
+                xstl <= 0;
+            else
+                xstl <= 1;
+        end
+
+    always @(posedge clk or posedge rst)
+        begin
+            if(rst)
+                xle<=0;
             else  if(cur_state == XLE_HIGH)
                 xle <= 1;
             else
                 xle <=0;
-            case(cur_state)
-                5'b00000:   xle = 0;
-                5'b00001:   xle = 0;
-                5'b00010:   xle = 0;
-                5'b00011:   xle = 0;
-                //5'b00100:
-                5'b00101:   xle = 0;
-                //5'b00110:
-                5'b00111:   xle = 0;
-                5'b01000:   xle = 1;
-                5'b01001:   xle = 0;
-                5'b01010:   xle = 0;
-            endcase
         end                         
-    always @(*)
+    
+    always @(posedge clk or posedge rst)
         begin
-            case(cur_state)
-                5'b00000:   xcl_en = 0;
-                5'b00001:   xcl_en = 0;
-                5'b00010:   xcl_en = 0;
-                5'b00011:   xcl_en = 0;
-                //5'b00100:
-                5'b00101:   xcl_en = 0;
-                //5'b00110:
-                5'b00111:   xcl_en = 0;
-                5'b01000:   xcl_en = 0;
-                5'b01001:   xcl_en = 0;
-                5'b01010:   xcl_en = 1;
-            endcase
+            if(rst)
+                xcl_en <= 1;
+            else if(cur_state == XSTL_LOW)
+                xcl_en <= 0;
+            else
+                xcl_en <= 1;
         end
     always @(*)
         begin
@@ -233,6 +279,8 @@ module eink_top(
         end
     
     //clk div
+    reg [15:0] pixel_cnt; //xcl_clk_
+    reg [15:0] line_cnt;
     reg [15:0] ckv_clk_counter;
     reg [15:0] xcl_clk_counter;
     reg ckv_clk,
@@ -242,7 +290,6 @@ module eink_top(
 
     always @(posedge clk or rst)    
         begin
-
             if(!rst)    
                 ckv_clk_counter <= 0;    
             else if(ckv_clk_counter == CKV_CYCLE_WIDTH)
@@ -254,19 +301,18 @@ module eink_top(
             else if(xcl_clk_counter == XCL_CYCLE_WIDTH)
                 xcl_couter <= 0;    
             else xcl_clk_counter <= xcl_clk_counter+1;  
-
         end
- 
-    always @(posedge clk or rst)   
+
+    always @(posedge clk or posedge rst)   
         begin 
 
-            if(!rst)    
+            if(rst)    
                 ckv_clk <= 0;    
             else if(ckv_clk_counter < CKV_HIGH_WIDTH)    
                 ckv_clk <= 0;    
             else ckv_clk <= 1; 
 
-            if(!rst)    
+            if(rst)    
                 xcl_clk<= 0;    
             else if(xcl_clk_counter < XCL_HIGH_WIDTH)    
                 xcl_clk <= 0;    
