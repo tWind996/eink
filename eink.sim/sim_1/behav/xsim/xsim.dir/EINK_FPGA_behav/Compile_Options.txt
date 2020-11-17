@@ -1,0 +1,1 @@
+-wto "48c26992506943a58c94625dcf3756c9" --incr --debug "typical" --relax --mt "2" -L "xil_defaultlib" -L "unisims_ver" -L "unimacro_ver" -L "secureip" --snapshot "EINK_FPGA_behav" "xil_defaultlib.EINK_FPGA" "xil_defaultlib.glbl" -log "elaborate.log" 
